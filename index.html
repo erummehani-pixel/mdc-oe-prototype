@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MDC Open Enrollment – RC Configuration Prototype</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --color-bg-primary: #ffffff;
+    --color-bg-secondary: #f5f6f7;
+    --color-bg-tertiary: #eef0f2;
+    --color-text-primary: #1a1c1e;
+    --color-text-secondary: #5a6070;
+    --color-text-tertiary: #9aa0ad;
+    --color-border-light: rgba(0,0,0,0.08);
+    --color-border-mid: rgba(0,0,0,0.14);
+    --color-border-strong: rgba(0,0,0,0.22);
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono: 'SF Mono', 'Fira Mono', 'Cascadia Code', monospace;
+  }
+  body { font-family: var(--font-sans); background: var(--color-bg-tertiary); min-height: 100vh; font-size: 14px; color: var(--color-text-primary); }
+
+  /* Layout */
+  .shell { display: flex; flex-direction: column; min-height: 100vh; }
+  .sim-bar { background: var(--color-bg-secondary); border-bottom: 1px solid var(--color-border-light); padding: 8px 20px; display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--color-text-tertiary); }
+  .sim-btn { font-size: 11px; padding: 4px 12px; border-radius: var(--radius-md); border: 1px solid var(--color-border-mid); background: var(--color-bg-primary); color: var(--color-text-secondary); cursor: pointer; transition: all .15s; }
+  .sim-btn:hover { background: var(--color-bg-tertiary); }
+  .sim-btn.sim-active { background: #1A3A5C; color: #fff; border-color: #1A3A5C; }
+  .topbar { background: var(--color-bg-primary); border-bottom: 1px solid var(--color-border-light); padding: 0 20px; display: flex; align-items: center; gap: 6px; height: 46px; font-size: 12px; color: var(--color-text-secondary); }
+  .topbar .crumb-sep { color: var(--color-text-tertiary); }
+  .topbar .active-crumb { color: var(--color-text-primary); font-weight: 500; }
+  .topbar .user-chip { margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 12px; }
+  .avatar { width: 28px; height: 28px; border-radius: 50%; background: #E6F1FB; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: #185FA5; }
+  .layout { display: flex; flex: 1; }
+  .sidebar { width: 192px; background: var(--color-bg-primary); border-right: 1px solid var(--color-border-light); padding: 16px 0; flex-shrink: 0; }
+  .nav-section { padding: 14px 16px 6px; font-size: 10px; color: var(--color-text-tertiary); letter-spacing: .08em; text-transform: uppercase; font-weight: 600; }
+  .nav-item { padding: 8px 16px; font-size: 13px; color: var(--color-text-secondary); cursor: pointer; border-left: 2px solid transparent; transition: all .12s; }
+  .nav-item:hover { background: var(--color-bg-secondary); color: var(--color-text-primary); }
+  .nav-item.active { color: var(--color-text-primary); font-weight: 500; border-left: 2px solid #1F6EB5; background: #EBF4FD; }
+  .main { flex: 1; padding: 28px 28px 48px; overflow-y: auto; max-width: 900px; }
+
+  /* Page header */
+  .page-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 24px; }
+  .page-title { font-size: 18px; font-weight: 600; color: var(--color-text-primary); }
+  .page-sub { font-size: 13px; color: var(--color-text-secondary); margin-top: 3px; }
+  .badge { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; padding: 4px 12px; border-radius: 20px; }
+  .badge-idle { background: var(--color-bg-secondary); color: var(--color-text-secondary); border: 1px solid var(--color-border-mid); }
+  .badge-scheduled { background: #FAEEDA; color: #633806; border: 1px solid #FAC775; }
+  .badge-active { background: #EAF3DE; color: #27500A; border: 1px solid #C0DD97; }
+  .badge-closed { background: var(--color-bg-secondary); color: var(--color-text-secondary); border: 1px solid var(--color-border-mid); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; display: inline-block; flex-shrink: 0; }
+  .dot-pulse { animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.3; } }
+
+  /* Cards */
+  .card { background: var(--color-bg-primary); border: 1px solid var(--color-border-light); border-radius: var(--radius-lg); padding: 20px 22px; }
+  .card + .card, .card + .sos-card { margin-top: 14px; }
+
+  /* Empty state */
+  .empty-state { text-align: center; padding: 52px 24px; }
+  .empty-icon { width: 52px; height: 52px; border-radius: 14px; background: var(--color-bg-secondary); display: flex; align-items: center; justify-content: center; margin: 0 auto 18px; }
+  .empty-title { font-size: 15px; font-weight: 600; margin-bottom: 8px; }
+  .empty-sub { font-size: 13px; color: var(--color-text-secondary); max-width: 340px; margin: 0 auto 22px; line-height: 1.65; }
+
+  /* Buttons */
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 18px; border-radius: var(--radius-md); font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid var(--color-border-mid); background: var(--color-bg-primary); color: var(--color-text-primary); transition: background .15s; font-family: var(--font-sans); }
+  .btn:hover { background: var(--color-bg-secondary); }
+  .btn-primary { background: #1A3A5C; color: #fff; border-color: #1A3A5C; }
+  .btn-primary:hover { background: #0f2640; }
+  .btn-danger { background: #FCEBEB; color: #791F1F; border-color: #F7C1C1; }
+  .btn-danger:hover { background: #F7C1C1; }
+  .btn-ghost { border-color: transparent; background: transparent; color: var(--color-text-secondary); }
+  .btn-ghost:hover { background: var(--color-bg-secondary); color: var(--color-text-primary); }
+  .btn-sm { padding: 6px 12px; font-size: 12px; }
+
+  /* Forms */
+  .form-group { margin-bottom: 16px; }
+  .form-label { font-size: 12px; font-weight: 500; color: var(--color-text-secondary); margin-bottom: 6px; display: block; }
+  .form-input { width: 100%; padding: 9px 12px; border: 1px solid var(--color-border-mid); border-radius: var(--radius-md); font-size: 13px; color: var(--color-text-primary); background: var(--color-bg-primary); font-family: var(--font-sans); transition: border-color .15s; }
+  .form-input:focus { outline: none; border-color: #1F6EB5; box-shadow: 0 0 0 3px rgba(31,110,181,.1); }
+  .form-input[readonly] { background: var(--color-bg-secondary); color: var(--color-text-secondary); cursor: default; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .form-hint { font-size: 11px; color: var(--color-text-tertiary); margin-top: 5px; }
+
+  /* Alerts */
+  .alert { border-radius: var(--radius-md); padding: 12px 16px; margin-bottom: 18px; font-size: 13px; display: flex; align-items: flex-start; gap: 10px; line-height: 1.5; }
+  .alert-live { background: #EAF3DE; color: #27500A; border: 1px solid #C0DD97; }
+  .alert-warn { background: #FAEEDA; color: #633806; border: 1px solid #FAC775; }
+  .alert-info { background: #E6F1FB; color: #0C447C; border: 1px solid #B5D4F4; }
+
+  /* Metrics */
+  .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 16px 0; }
+  .metric { background: var(--color-bg-secondary); border-radius: var(--radius-md); padding: 14px 16px; }
+  .metric-label { font-size: 11px; color: var(--color-text-secondary); margin-bottom: 6px; font-weight: 500; text-transform: uppercase; letter-spacing: .04em; }
+  .metric-val { font-size: 24px; font-weight: 600; color: var(--color-text-primary); font-family: var(--font-mono); }
+  .metric-sub { font-size: 11px; color: var(--color-text-tertiary); margin-top: 4px; }
+
+  /* Detail rows */
+  .section-label { font-size: 11px; font-weight: 600; color: var(--color-text-secondary); letter-spacing: .07em; text-transform: uppercase; margin-bottom: 12px; }
+  .detail-row { display: flex; justify-content: space-between; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--color-border-light); font-size: 13px; }
+  .detail-row:last-child { border-bottom: none; }
+  .detail-key { color: var(--color-text-secondary); }
+  .detail-val { color: var(--color-text-primary); font-weight: 500; font-family: var(--font-mono); font-size: 12px; }
+  .row-between { display: flex; align-items: center; justify-content: space-between; }
+
+  /* Channels */
+  .channel-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
+  .channel-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border: 1px solid var(--color-border-light); border-radius: var(--radius-md); }
+  .channel-name { font-size: 13px; color: var(--color-text-primary); }
+  .channel-status { font-size: 11px; font-weight: 600; display: flex; align-items: center; gap: 5px; }
+  .ch-on { color: #3B6D11; }
+  .ch-off { color: var(--color-text-tertiary); }
+
+  /* Countdown */
+  .countdown-block { background: var(--color-bg-secondary); border-radius: var(--radius-md); padding: 16px 18px; display: flex; align-items: center; justify-content: space-between; }
+  .countdown-label { font-size: 12px; color: var(--color-text-secondary); margin-bottom: 4px; }
+  .countdown-val { font-size: 22px; font-weight: 600; font-family: var(--font-mono); color: var(--color-text-primary); }
+  .progress-bar { height: 4px; background: var(--color-bg-tertiary); border-radius: 2px; overflow: hidden; margin-top: 10px; }
+  .progress-fill { height: 100%; background: #639922; border-radius: 2px; transition: width .8s ease; }
+
+  /* SOS card */
+  .sos-card { border: 1px solid #F7C1C1; border-radius: var(--radius-md); padding: 16px 18px; margin-top: 14px; background: #fff; }
+  .sos-title { font-size: 12px; font-weight: 600; color: #A32D2D; margin-bottom: 5px; text-transform: uppercase; letter-spacing: .05em; }
+  .sos-sub { font-size: 12px; color: var(--color-text-secondary); margin-bottom: 12px; line-height: 1.6; }
+
+  /* Modal overlay */
+  .modal-overlay { background: rgba(0,0,0,0.18); border-radius: var(--radius-lg); padding: 28px 20px; display: flex; align-items: flex-start; justify-content: center; min-height: 480px; }
+  .modal { background: var(--color-bg-primary); border: 1px solid var(--color-border-mid); border-radius: var(--radius-lg); padding: 26px; width: 100%; max-width: 500px; }
+  .modal-title { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+  .modal-sub { font-size: 13px; color: var(--color-text-secondary); margin-bottom: 22px; line-height: 1.6; }
+  .checklist-box { background: var(--color-bg-secondary); border-radius: var(--radius-md); padding: 14px 16px; margin: 14px 0; }
+  .checklist-title { font-size: 11px; font-weight: 600; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 10px; }
+  .chk-item { display: flex; align-items: center; gap: 10px; font-size: 13px; cursor: pointer; padding: 4px 0; color: var(--color-text-primary); }
+  .chk-item input { width: 15px; height: 15px; cursor: pointer; accent-color: #1F6EB5; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .divider { border: none; border-top: 1px solid var(--color-border-light); margin: 18px 0; }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- Simulator bar -->
+  <div class="sim-bar">
+    <span>Simulate state →</span>
+    <button class="sim-btn sim-active" onclick="setState('idle')">No window</button>
+    <button class="sim-btn" onclick="setState('form')">Schedule form</button>
+    <button class="sim-btn" onclick="setState('scheduled')">Scheduled</button>
+    <button class="sim-btn" onclick="setState('active')">Active (live)</button>
+    <button class="sim-btn" onclick="setState('closed')">Closed</button>
+  </div>
+
+  <!-- Top bar -->
+  <div class="topbar">
+    <span>Reach Central</span>
+    <span class="crumb-sep">›</span>
+    <span>Tools</span>
+    <span class="crumb-sep">›</span>
+    <span class="active-crumb">MDC Configuration</span>
+    <div class="user-chip">
+      <span style="font-size:12px; color:var(--color-text-secondary)">Brand TS Admin</span>
+      <div class="avatar">TS</div>
+    </div>
+  </div>
+
+  <div class="layout">
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="nav-section">Tools</div>
+      <div class="nav-item">Plan Config</div>
+      <div class="nav-item">Device Rules</div>
+      <div class="nav-item active">MDC Configuration</div>
+      <div class="nav-item">Promotions</div>
+      <div class="nav-section">Reports</div>
+      <div class="nav-item">Enrollment</div>
+      <div class="nav-item">Analytics</div>
+      <div class="nav-section">Admin</div>
+      <div class="nav-item">Permissions</div>
+      <div class="nav-item">Audit Log</div>
+    </div>
+
+    <!-- Main content -->
+    <div class="main">
+
+      <div class="page-header">
+        <div>
+          <div class="page-title">MDC Configuration</div>
+          <div class="page-sub">Manage Mobile Device Care enrollment settings and Open Enrollment windows</div>
+        </div>
+        <div id="status-badge" class="badge badge-idle">
+          <span class="dot"></span>No active window
+        </div>
+      </div>
+
+      <!-- ── IDLE ──────────────────────────────────────────────────── -->
+      <div id="state-idle">
+        <div class="card">
+          <div class="empty-state">
+            <div class="empty-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-tertiary)" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+            </div>
+            <div class="empty-title">No enrollment window configured</div>
+            <div class="empty-sub">The standard 30-day window is active. Schedule an Open Enrollment window to temporarily extend eligibility to all customers and devices.</div>
+            <button class="btn btn-primary" onclick="setState('form')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+              Schedule Open Enrollment window
+            </button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="section-label">Current MDC configuration</div>
+          <div class="detail-row"><span class="detail-key">Standard enrollment window</span><span class="detail-val">30 days post-activation</span></div>
+          <div class="detail-row"><span class="detail-key">BYOD eligibility</span><span class="detail-val">Questionnaire required</span></div>
+          <div class="detail-row"><span class="detail-key">Open Enrollment status</span><span class="detail-val">INACTIVE</span></div>
+          <div class="detail-row"><span class="detail-key">Last window</span><span class="detail-val">None recorded</span></div>
+        </div>
+      </div>
+
+      <!-- ── FORM ──────────────────────────────────────────────────── -->
+      <div id="state-form" class="hidden">
+        <div class="modal-overlay">
+          <div class="modal">
+            <div class="modal-title">Schedule Open Enrollment window</div>
+            <div class="modal-sub">The system auto-enables at the Start DateTime and auto-closes at the calculated End DateTime. You can override manually at any point from this screen.</div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Start date</label>
+                <input type="date" id="start-date" class="form-input" oninput="calcEnd()">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Start time</label>
+                <input type="time" id="start-time" class="form-input" value="09:00" oninput="calcEnd()">
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Duration (days) <span style="color:#E24B4A">*</span></label>
+              <input type="number" id="duration" class="form-input" value="14" min="1" max="90" oninput="calcEnd()">
+              <div class="form-hint">Required. Minimum 1 day · Maximum 90 days.</div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">End date & time — auto-calculated</label>
+              <input type="text" id="end-display" class="form-input" readonly value="Set a start date and duration above">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Channels</label>
+              <input type="text" class="form-input" readonly value="Web (buy flow) · Web (standalone) · Mobile App · MyAccount · Reach Central">
+              <div class="form-hint">All channels activate simultaneously. Partial enablement is not supported.</div>
+            </div>
+            <div class="checklist-box">
+              <div class="checklist-title">Pre-activation checklist — confirm before scheduling</div>
+              <label class="chk-item"><input type="checkbox" id="chk1"> Communications scheduled and approved by Marketing</label>
+              <label class="chk-item"><input type="checkbox" id="chk2"> Agent scripts prepared and distributed</label>
+              <label class="chk-item"><input type="checkbox" id="chk3"> Brand request confirmed in writing</label>
+            </div>
+            <div style="display:flex; gap:10px; margin-top:20px">
+              <button class="btn btn-primary" onclick="confirmSchedule()">Confirm schedule</button>
+              <button class="btn btn-ghost" onclick="setState('idle')">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── SCHEDULED ─────────────────────────────────────────────── -->
+      <div id="state-scheduled" class="hidden">
+        <div class="alert alert-info">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="flex-shrink:0;margin-top:1px"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          Open Enrollment is scheduled. The system will auto-enable at the configured Start DateTime. No action required.
+        </div>
+        <div class="card">
+          <div class="row-between" style="margin-bottom:18px">
+            <div class="section-label" style="margin:0">Window configuration</div>
+            <div style="display:flex; gap:8px">
+              <button class="btn btn-sm" onclick="setState('form')">Edit</button>
+              <button class="btn btn-sm btn-danger" onclick="cancelWindow()">Cancel window</button>
+            </div>
+          </div>
+          <div class="detail-row"><span class="detail-key">Start DateTime</span><span class="detail-val" id="sched-start">—</span></div>
+          <div class="detail-row"><span class="detail-key">Duration</span><span class="detail-val" id="sched-dur">—</span></div>
+          <div class="detail-row"><span class="detail-key">End DateTime (auto-calculated)</span><span class="detail-val" id="sched-end">—</span></div>
+          <div class="detail-row"><span class="detail-key">Channels</span><span class="detail-val">All (5 surfaces)</span></div>
+          <div class="detail-row"><span class="detail-key">Customer scope</span><span class="detail-val">All customers</span></div>
+          <div class="detail-row"><span class="detail-key">Device scope</span><span class="detail-val">All devices</span></div>
+          <div class="detail-row"><span class="detail-key">Configured by</span><span class="detail-val" id="sched-by">—</span></div>
+          <div class="detail-row"><span class="detail-key">Activation mode</span><span class="detail-val">Auto (scheduled)</span></div>
+        </div>
+        <div class="sos-card">
+          <div class="sos-title">Manual override — SOS only</div>
+          <div class="sos-sub">Use force-enable if the window needs to go live immediately, ahead of the scheduled start time. This bypasses the scheduled DateTime and activates across all channels within 5 minutes. This action is logged.</div>
+          <button class="btn btn-sm btn-danger" onclick="setState('active')">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            Force enable now
+          </button>
+        </div>
+      </div>
+
+      <!-- ── ACTIVE ─────────────────────────────────────────────────── -->
+      <div id="state-active" class="hidden">
+        <div class="alert alert-live">
+          <span class="dot dot-pulse" style="flex-shrink:0; margin-top:3px"></span>
+          Open Enrollment is LIVE. All customers and devices are eligible. The window closes automatically at End DateTime — no action required.
+        </div>
+        <div class="metric-grid">
+          <div class="metric">
+            <div class="metric-label">Total enrollments</div>
+            <div class="metric-val" id="m-total">—</div>
+            <div class="metric-sub">Since window opened</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Via BYOD flow</div>
+            <div class="metric-val" id="m-byod">—</div>
+            <div class="metric-sub">Out-of-window devices</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">BYOD pass rate</div>
+            <div class="metric-val" id="m-pass">—</div>
+            <div class="metric-sub">Questionnaire pass %</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Channels active</div>
+            <div class="metric-val">5 / 5</div>
+            <div class="metric-sub">All surfaces live</div>
+          </div>
+        </div>
+        <div class="two-col" style="gap:14px">
+          <div class="card">
+            <div class="section-label">Time remaining</div>
+            <div class="countdown-block">
+              <div>
+                <div class="countdown-label">Auto-closes in</div>
+                <div class="countdown-val" id="countdown">00d 00h 00m 00s</div>
+                <div class="countdown-label" style="margin-top:6px; font-size:11px" id="end-ts">—</div>
+              </div>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#639922" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+            </div>
+            <div class="progress-bar"><div class="progress-fill" id="prog" style="width:0%"></div></div>
+            <div style="font-size:11px; color:var(--color-text-tertiary); margin-top:6px">Window elapsed</div>
+          </div>
+          <div class="card">
+            <div class="section-label">Channel status</div>
+            <div class="channel-grid">
+              <div class="channel-item"><span class="channel-name">Web – Buy flow</span><span class="channel-status ch-on"><span class="dot"></span>Live</span></div>
+              <div class="channel-item"><span class="channel-name">Web – Standalone</span><span class="channel-status ch-on"><span class="dot"></span>Live</span></div>
+              <div class="channel-item"><span class="channel-name">Mobile App</span><span class="channel-status ch-on"><span class="dot"></span>Live</span></div>
+              <div class="channel-item"><span class="channel-name">MyAccount</span><span class="channel-status ch-on"><span class="dot"></span>Live</span></div>
+              <div class="channel-item" style="grid-column:span 2"><span class="channel-name">Reach Central (agent)</span><span class="channel-status ch-on"><span class="dot"></span>Live</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="sos-card">
+          <div class="sos-title">Emergency disable — SOS only</div>
+          <div class="sos-sub">Immediately closes the Open Enrollment window across all channels. Eligibility reverts to the standard 30-day rule within 5 minutes. A reason is required and this action is logged with your user ID and timestamp.</div>
+          <button class="btn btn-danger btn-sm" onclick="showDisableConfirm()">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6"/></svg>
+            Emergency disable
+          </button>
+        </div>
+        <div id="disable-confirm" class="hidden" style="margin-top:12px">
+          <div class="card" style="border-color:#F7C1C1">
+            <div style="font-size:14px; font-weight:600; color:#791F1F; margin-bottom:6px">Confirm emergency disable</div>
+            <div style="font-size:13px; color:var(--color-text-secondary); margin-bottom:14px; line-height:1.5">This action is irreversible and will be logged. All channel surfaces will revert to standard 30-day eligibility within 5 minutes.</div>
+            <div class="form-group">
+              <label class="form-label">Reason <span style="color:#E24B4A">*</span></label>
+              <input type="text" id="disable-reason" class="form-input" placeholder="e.g. Fraud signal detected, brand withdrawal request...">
+            </div>
+            <div style="display:flex; gap:8px">
+              <button class="btn btn-danger btn-sm" onclick="doDisable()">Confirm — disable now</button>
+              <button class="btn btn-ghost btn-sm" onclick="hideDisableConfirm()">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── CLOSED ─────────────────────────────────────────────────── -->
+      <div id="state-closed" class="hidden">
+        <div class="alert alert-warn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="flex-shrink:0;margin-top:1px"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
+          Open Enrollment window has closed. Eligibility has reverted to the standard 30-day rule across all channels.
+        </div>
+        <div class="card">
+          <div class="section-label">Window summary</div>
+          <div class="metric-grid" style="margin: 12px 0 0">
+            <div class="metric"><div class="metric-label">Total enrollments</div><div class="metric-val">1,284</div></div>
+            <div class="metric"><div class="metric-label">BYOD enrollments</div><div class="metric-val">892</div></div>
+            <div class="metric"><div class="metric-label">BYOD pass rate</div><div class="metric-val">74%</div></div>
+            <div class="metric"><div class="metric-label">Window duration</div><div class="metric-val">14d</div></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="section-label">Closure details</div>
+          <div class="detail-row"><span class="detail-key">Closure type</span><span class="detail-val" id="closure-type">Auto (End DateTime)</span></div>
+          <div class="detail-row"><span class="detail-key">Closed at</span><span class="detail-val" id="closure-time">—</span></div>
+          <div class="detail-row"><span class="detail-key">Channels reverted</span><span class="detail-val">All 5 surfaces — within 3 min</span></div>
+          <div class="detail-row"><span class="detail-key">Post-window comms</span><span class="detail-val">Triggered automatically</span></div>
+          <div class="detail-row"><span class="detail-key">Audit log entry</span><span class="detail-val">Written</span></div>
+        </div>
+        <div style="display:flex; gap:10px; margin-top:18px; align-items:center">
+          <button class="btn btn-primary" onclick="setState('form')">Schedule next window</button>
+          <button class="btn" onclick="">View audit log</button>
+          <span style="font-size:12px; color:var(--color-text-tertiary); margin-left:4px">Full analytics available in GA — see Analytics tab</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  let countdownTimer = null;
+  let metricsTimer = null;
+  let activeEndTime = null;
+  let activeStartTime = null;
+  let schedData = {};
+  let closureType = 'Auto (End DateTime)';
+
+  function setState(s) {
+    ['idle','form','scheduled','active','closed'].forEach(id => {
+      const el = document.getElementById('state-' + id);
+      if (el) el.classList.toggle('hidden', id !== s);
+    });
+    document.querySelectorAll('.sim-btn').forEach((b, i) => {
+      b.classList.toggle('sim-active', ['idle','form','scheduled','active','closed'][i] === s);
+    });
+    const badge = document.getElementById('status-badge');
+    const badgeMap = { idle: 'badge-idle', form: 'badge-idle', scheduled: 'badge-scheduled', active: 'badge-active', closed: 'badge-closed' };
+    const labelMap = { idle: 'No active window', form: 'Configuring…', scheduled: 'Scheduled', active: 'Live', closed: 'Closed' };
+    badge.className = 'badge ' + badgeMap[s];
+    badge.innerHTML = `<span class="dot${s === 'active' ? ' dot-pulse' : ''}"></span>${labelMap[s]}`;
+    clearInterval(countdownTimer);
+    clearInterval(metricsTimer);
+    if (s === 'active') startActiveState();
+    if (s === 'form') initForm();
+  }
+
+  function initForm() {
+    const today = new Date();
+    document.getElementById('start-date').value = today.toISOString().split('T')[0];
+    calcEnd();
+  }
+
+  function calcEnd() {
+    const d = document.getElementById('start-date').value;
+    const t = document.getElementById('start-time').value || '09:00';
+    const dur = parseInt(document.getElementById('duration').value) || 14;
+    if (!d) return;
+    const start = new Date(d + 'T' + t);
+    const end = new Date(start.getTime() + dur * 86400000);
+    document.getElementById('end-display').value = formatDT(end);
+    schedData = { start, end, dur };
+  }
+
+  function confirmSchedule() {
+    const chks = ['chk1','chk2','chk3'].map(id => document.getElementById(id).checked);
+    if (!chks.every(Boolean)) {
+      alert('Please confirm all items in the pre-activation checklist before scheduling.');
+      return;
+    }
+    calcEnd();
+    if (!schedData.start) { alert('Please set a start date.'); return; }
+    document.getElementById('sched-start').textContent = formatDT(schedData.start);
+    document.getElementById('sched-dur').textContent = schedData.dur + ' days';
+    document.getElementById('sched-end').textContent = formatDT(schedData.end);
+    document.getElementById('sched-by').textContent = 'TS Admin · ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    setState('scheduled');
+  }
+
+  function cancelWindow() {
+    if (confirm('Cancel this scheduled window? This cannot be undone.')) setState('idle');
+  }
+
+  function startActiveState() {
+    const now = new Date();
+    activeStartTime = now;
+    activeEndTime = new Date(now.getTime() + 14 * 86400000);
+    document.getElementById('end-ts').textContent = 'Ends ' + formatDT(activeEndTime);
+    let total = 48, byod = 31;
+
+    function tickMetrics() {
+      total += Math.floor(Math.random() * 3);
+      byod += Math.floor(Math.random() * 2);
+      const pass = Math.round(68 + Math.random() * 12);
+      document.getElementById('m-total').textContent = total.toLocaleString();
+      document.getElementById('m-byod').textContent = byod.toLocaleString();
+      document.getElementById('m-pass').textContent = pass + '%';
+    }
+    tickMetrics();
+    metricsTimer = setInterval(tickMetrics, 3000);
+
+    function tickCountdown() {
+      const rem = activeEndTime - new Date();
+      if (rem <= 0) { clearInterval(countdownTimer); setState('closed'); return; }
+      const days = Math.floor(rem / 86400000);
+      const hrs  = Math.floor((rem % 86400000) / 3600000);
+      const mins = Math.floor((rem % 3600000) / 60000);
+      const secs = Math.floor((rem % 60000) / 1000);
+      document.getElementById('countdown').textContent =
+        String(days).padStart(2,'0') + 'd ' +
+        String(hrs).padStart(2,'0') + 'h ' +
+        String(mins).padStart(2,'0') + 'm ' +
+        String(secs).padStart(2,'0') + 's';
+      const elapsed = (new Date() - activeStartTime) / (activeEndTime - activeStartTime);
+      document.getElementById('prog').style.width = Math.min(100, Math.round(elapsed * 10000) / 100) + '%';
+    }
+    tickCountdown();
+    countdownTimer = setInterval(tickCountdown, 1000);
+  }
+
+  function showDisableConfirm() {
+    document.getElementById('disable-confirm').classList.remove('hidden');
+  }
+  function hideDisableConfirm() {
+    document.getElementById('disable-confirm').classList.add('hidden');
+  }
+  function doDisable() {
+    const reason = document.getElementById('disable-reason').value.trim();
+    if (!reason) { alert('A reason is required to disable the window.'); return; }
+    document.getElementById('closure-type').textContent = 'Manual (TS override)';
+    document.getElementById('closure-time').textContent = new Date().toLocaleString();
+    clearInterval(countdownTimer);
+    clearInterval(metricsTimer);
+    setState('closed');
+  }
+
+  function formatDT(d) {
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) +
+      ' at ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  setState('idle');
+</script>
+</body>
+</html>
